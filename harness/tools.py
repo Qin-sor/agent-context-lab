@@ -3,7 +3,7 @@
 设计要点：
 - 所有路径解析强制落在工作区内（防逃逸）。
 - 工具结果超过 MAX_RESULT_CHARS 截断并提示「用 run_python 处理全量数据」——
-  把 tool-call offloading（大数据下沉文件系统/代码执行，上下文只留摘要）内置进工具设计。
+  把 tool-call offloading（大块数据转存到文件系统或交给代码执行，上下文只留摘要）内置进工具设计。
 - 每次工具调用记录到 Workspace.tool_log，供约束检查器审计（如「done 前必须跑过测试」）。
 """
 import os

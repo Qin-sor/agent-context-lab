@@ -3,7 +3,7 @@
 - OpenAICompatLLM：任何 OpenAI 兼容端点（DeepSeek: base_url=https://api.deepseek.com,
   model=deepseek-chat；也兼容 OpenAI / Kimi / Qwen 等）。零第三方依赖（urllib）。
 - MockLLM：确定性脚本模型，按任务给定的 plan 依次发工具调用。
-  只用于零成本验证整条管线（agent loop / 工具 / 上下文策略 / 指标统计），
+  只用于零成本验证整条链路（agent loop / 工具 / 上下文策略 / 指标统计），
   不产生有科学意义的对比数据——真实数据必须用真实 API 跑。
 """
 import json
@@ -27,7 +27,7 @@ class LLMReply:
 
 def estimate_tokens(text):
     """CJK 感知的 token 粗估：中文 ~1 字/token，ASCII ~4 字符/token。
-    （首版用 len//3 对中文低估约 3 倍，导致真实 API 上压缩触发器长期不触发——
+    （首版用 len//3 对中文低估约 3 倍，导致真实 API 上压缩长期无法触发——
     估算口径错误会让实验现象整体失灵，此处是修复后的口径。）
     触发阈值用估算，成本统计用 API 返回的真实 usage。"""
     t = str(text)

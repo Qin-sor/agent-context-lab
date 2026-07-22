@@ -5,7 +5,7 @@
   * 文本层（probe_keywords）：compaction 事件后，约束原文关键词是否还在上下文里；
   * 行为层（check_fn）：任务结束后在工作区里验证 agent 是否真的遵守了。
 - 工作区里刻意放大文件（长日志/多文件），制造上下文压力，逼 compaction 真实触发。
-- 每个任务带 mock_plan：MockLLM 按 plan 回放正确解法，用于零成本验证整条管线。
+- 每个任务带 mock_plan：MockLLM 按 plan 回放正确解法，用于零成本验证整条链路。
 """
 import hashlib
 import json

@@ -2,7 +2,7 @@
 """实验矩阵入口：tasks × strategies × runs → results/results.jsonl + summary.md（可选出图）。
 
 用法：
-  python3 run_experiment.py --backend mock --budget 3000          # 管线自测（零成本、确定性）
+  python3 run_experiment.py --backend mock --budget 3000          # 端到端自测（零成本、确定性）
   export DEEPSEEK_API_KEY=sk-...
   python3 run_experiment.py --backend deepseek --budget 12000 --runs 3
   python3 run_experiment.py --backend deepseek --constraint-aware-summary   # 摘要保约束对照组
@@ -33,12 +33,12 @@ def main():
     ap.add_argument("--model", default=None)
     ap.add_argument("--strategies", default=",".join(STRATEGIES))
     ap.add_argument("--tasks", default="all", help="逗号分隔任务名，或 all")
-    ap.add_argument("--budget", type=int, default=12000, help="触发上下文治理的 token 预算")
+    ap.add_argument("--budget", type=int, default=12000, help="触发上下文管理的 token 预算")
     ap.add_argument("--keep-recent", type=int, default=6)
     ap.add_argument("--max-steps", type=int, default=30)
     ap.add_argument("--runs", type=int, default=1, help="重复次数（控制非确定性，看方差）")
     ap.add_argument("--constraint-aware-summary", action="store_true",
-                    help="compaction 摘要 prompt 显式要求逐条保留硬性约束（对照旋钮）")
+                    help="compaction 摘要 prompt 显式要求逐条保留硬性约束（对照开关）")
     ap.add_argument("--tag", default="", help="结果文件名后缀")
     ap.add_argument("--plot", action="store_true", help="需要 matplotlib")
     args = ap.parse_args()
@@ -128,7 +128,7 @@ def summarize(records, strategies, meta):
                      % (s, succ * 100, cons_rate * 100, surv,
                         sum(pts) / n, pt_sd, avg_ct, avg_cp))
     if meta.get("backend") == "mock":
-        lines += ["", "**⚠️ mock 数据仅验证管线，不可用于任何对比结论**（假摘要机制性偏向保留约束）。"]
+        lines += ["", "**⚠️ mock 数据仅验证链路，不可用于任何对比结论**（假摘要机制性偏向保留约束）。"]
     lines += ["", "注：约束文本存活率 = 最后一次 compaction 后，各硬性约束的独有短语仍在"
                   "非 tool 上下文中的比例（整句短语命中 = 保守口径，改写不计；行为层由约束检查器兜底）。"]
     return "\n".join(lines)

@@ -1,4 +1,4 @@
-"""最小 agent loop：system + 任务指令 → (上下文策略整备 → 模型 → 工具执行) 循环 → done。"""
+"""最小 agent loop：system + 任务指令 → (上下文准备 → 模型 → 工具执行) 循环 → done。"""
 import time
 
 from . import tools
