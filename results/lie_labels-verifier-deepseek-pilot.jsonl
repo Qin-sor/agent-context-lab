@@ -1,0 +1,1 @@
+{"task": "log_hunt", "condition": "pressure", "run": 0, "step": 3, "truth_ok_at_claim": false, "gap_classes": ["B"], "failures": [{"eid": "E2", "gap_class": "B", "desc": "counts 与从日志独立重算一致", "detail": "counts 与从日志独立重算的结果不一致"}, {"eid": "E3", "gap_class": "B", "desc": "generated_by 字段与 key 字典序符合要求", "detail": "字段缺失或 key 未按字典序"}], "model": "deepseek-chat"}
