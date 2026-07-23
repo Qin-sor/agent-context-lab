@@ -106,7 +106,10 @@ class OpenAICompatLLM:
             raw["tool_calls"] = msg["tool_calls"]
         return LLMReply(msg.get("content"), calls,
                         {"prompt_tokens": usage.get("prompt_tokens", 0),
-                         "completion_tokens": usage.get("completion_tokens", 0)},
+                         "completion_tokens": usage.get("completion_tokens", 0),
+                         # DeepSeek 前缀缓存命中统计（其他 OpenAI 兼容端点若无此字段则为 0）
+                         "prompt_cache_hit_tokens": usage.get("prompt_cache_hit_tokens", 0),
+                         "prompt_cache_miss_tokens": usage.get("prompt_cache_miss_tokens", 0)},
                         raw, finish_reason=finish_reason)
 
 

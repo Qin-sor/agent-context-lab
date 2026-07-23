@@ -98,12 +98,27 @@ python3 run_experiment.py --backend openai-compat --base-url https://api.example
 
 自测：`python3 test_verifier.py`（正确解法应通过验收；5 种破坏场景应被拒且分级正确）。踩坑记录：验收侧自己跑 unittest 曾生成 `__pycache__` 污染「未被修改」快照判定——测量行为改变被测对象，已用 `-B` + 快照过滤修复。
 
+## KV cache 前缀实验（首轮结果）
+
+对照两种 harness 前缀设计（每次调用注入完全相同的心跳易变信息，仅位置不同）：3 任务 × 2 变体 × 2 重复（deepseek-chat，命中数据来自 API 返回的 `prompt_cache_hit_tokens / prompt_cache_miss_tokens`，上下文策略固定 full）：
+
+| 前缀设计 | 任务成功率 | 总命中 / 总 miss (tokens) | 加权命中率 | 平均每调用延迟 |
+|---|---|---|---|---|
+| volatile_system（心跳追加进 system prompt） | 100% | 19840 / 72943 | **21%** | 1.79s |
+| stable_prefix（心跳作临时尾部消息，不入持久历史） | 100% | 79488 / 8971 | **90%** | 1.64s |
+
+**结论：**
+
+1. 同样的信息、只是位置不同：前缀缓存命中率 21% vs 90%；按 DeepSeek 定价（缓存命中价 ≈ 1/10 未命中价）估算，**输入侧成本相差约 4 倍**；
+2. 工程规则：时间戳 / 剩余预算 / 心跳等易变信息**永远不要写进 system prompt 或持久历史前缀**——作为临时尾部消息注入、用完即弃；
+3. 测量注记（诚实）：volatile 组的非零命中有两个来源——注入点之前的 system 头部块仍按块命中 + 重复 run 采用确定性心跳序列造成的跨 run 命中；真实场景中时间戳不会跨会话重复，**21% 是该反模式的上界、实际更差**。
+
 ## Roadmap
 
 - [x] deepseek-chat 真实数据 + 方差（两组矩阵共 90 run）→ 见「首轮实测结果」
 - [x] default-FAIL verifier 组件化 + 84 run 对照 + A/B/C/D 标注数据集 → 见「verifier 实验」
 - [ ] **长任务版**：验证「文本丢失 → 行为违规」的传导（首轮违规率 0%，任务过短未传导——需 20+ 步、约束动作分布在压缩前后的任务设计）
 - [ ] 逐约束归因：每条约束丢在第几次 compaction（context_events 里已有原始数据，待分析脚本）
-- [ ] prefix cache 命中率维度（DeepSeek API 返回 cache hit 字段，比较三策略对缓存友好度）
+- [x] prefix cache 命中率维度 → 见「KV cache 前缀实验」（compaction 重写历史对缓存的破坏，留作后续单独对照）
 - [ ] tool_choice=required 强制工具调用（替代熔断 nudge）
 - [ ] 更多策略：滑动窗口丢弃 / 分层摘要 / 约束下沉到 system prompt（CLAUDE.md 模式）对照
