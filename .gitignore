@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 tmp/
 # results/ 不忽略：jsonl+summary 是本仓库的核心数据，随代码一起提交
+texput.log

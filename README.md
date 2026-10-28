@@ -113,12 +113,40 @@ python3 run_experiment.py --backend openai-compat --base-url https://api.example
 2. 工程规则：时间戳 / 剩余预算 / 心跳等易变信息**永远不要写进 system prompt 或持久历史前缀**——作为临时尾部消息注入、用完即弃；
 3. 测量注记（诚实）：volatile 组的非零命中有两个来源——注入点之前的 system 头部块仍按块命中 + 重复 run 采用确定性心跳序列造成的跨 run 命中；真实场景中时间戳不会跨会话重复，**21% 是该反模式的上界、实际更差**。
 
+## compaction × KV cache 实验（首轮结果）
+
+KV cache 前缀实验把上下文策略固定为 full，留下一个问题：compaction 把早期历史换成摘要，压缩点之后的前缀全部改变，前缀缓存应当在压缩后大面积失效。本实验（`run_compaction_cache_experiment.py`）沿用主实验的 5 个任务，对比 full / compact / compact_clear 三种策略的逐次调用缓存命中：agent 调用分为「每个 run 的第一次」「压缩后的第一次」「清除后的第一次」「平常」四类，ContextManager 内部的摘要请求单列。模型 deepseek-flash（关闭思考；deepseek-chat 已在官方弃用通知之列），5 任务 × 3 策略 × 2 重复，两档 token 预算各跑一批，共 60 run；命中数据来自 API 返回的 `prompt_cache_hit_tokens / prompt_cache_miss_tokens`，两批合计 API 费用约 0.3 元。
+
+```bash
+python3 run_compaction_cache_experiment.py --backend mock                                   # 链路自测（mock 无缓存字段）
+python3 run_compaction_cache_experiment.py --backend deepseek --model deepseek-flash --runs 2                # 预算 1500
+python3 run_compaction_cache_experiment.py --backend deepseek --model deepseek-flash --budget 1000 --runs 2 --tag b1000
+```
+
+| 预算 | 策略 | 成功率 | 平均压缩 / 清除次数 | 平均 prompt tok | 总命中率 | 平常调用命中率 | 压缩后首次调用命中率（次数） | 摘要请求命中率 | 折算输入成本 | 相对 full |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1500 | full | 80% | 0 / 0 | 7157 | 79% | 81% | — | — | 2077 | 1.00× |
+| 1500 | compact | 80% | 0.4 / 0 | 7012 | 69% | 82% | 20%（4） | 0% | 2658 | 1.28× |
+| 1500 | compact_clear | 90% | 0.5 / 0.5 | 7648 | 68% | 83% | 16%（5） | 11% | 2994 | 1.44× |
+| 1000 | full | 80% | 0 / 0 | 7236 | 83% | 85% | — | — | 1799 | 1.00× |
+| 1000 | compact | 90% | 0.9 / 0 | 7552 | 62% | 83% | 26%（9） | 3% | 3324 | 1.85× |
+| 1000 | compact_clear | 80% | 2.2 / 0.5 | 10542 | 52% | 84% | 30%（22） | 10% | 5600 | 3.11× |
+
+折算输入成本 = 未命中 token + 0.1 × 命中 token（DeepSeek 命中价约为未命中价的 1/10），含摘要请求，按 run 平均。原始数据：`results/results-compaction-cache-deepseek{,-b1000}.jsonl`，汇总：`results/summary-compaction-cache-deepseek{,-b1000}.md`。
+
+**结论：**
+
+1. **压缩点就是缓存断点**：两批合并，压缩后的第一次 agent 调用命中率 **26%**（40 次），同组平常调用 **83%**（129 次）；摘要请求把整段历史换一种排布重发，命中率只有 2%–10%。
+2. **小尺度任务上 compaction 不省钱**：省下的 prompt token 很少，摘要请求和压缩后多走的步数还会把它吃回去；按命中价折算，compact 的输入成本是 full 的 **1.28–1.85 倍**，compact_clear 是 1.44–3.11 倍。
+3. **工程规则**：压缩时机与频率要把缓存命中算进成本模型，接近硬上限前尽量不压、一次压到位，避免频繁小压；这和「易变信息不进前缀」是同一条规则：任何改写前缀的操作，都要付一次缓存重建的钱。
+4. **适用边界**：任务只有 4–7 步，full 从未触及上下文上限，看不到长任务上「不压就超限」的那一面；每格 10 run，整体成本比值受 run 间步数差异影响（预算 1000 时 compact_clear 平均多走步数），按调用分组的命中率比整体成本比稳定；模型为 deepseek-flash，与前三组实验的 deepseek-chat 不同，缓存行为属于服务端特性，两组数字不直接合并比较。
+
 ## Roadmap
 
 - [x] deepseek-chat 真实数据 + 方差（两组矩阵共 90 run）→ 见「首轮实测结果」
 - [x] default-FAIL verifier 组件化 + 84 run 对照 + A/B/C/D 标注数据集 → 见「verifier 实验」
 - [ ] **长任务版**：验证「文本丢失 → 行为违规」的传导（首轮违规率 0%，任务过短未传导——需 20+ 步、约束动作分布在压缩前后的任务设计）
 - [ ] 逐约束归因：每条约束丢在第几次 compaction（context_events 里已有原始数据，待分析脚本）
-- [x] prefix cache 命中率维度 → 见「KV cache 前缀实验」（compaction 重写历史对缓存的破坏，留作后续单独对照）
+- [x] prefix cache 命中率维度 → 见「KV cache 前缀实验」；compaction 重写历史对缓存的破坏 → 见「compaction × KV cache 实验」
 - [ ] tool_choice=required 强制工具调用（替代熔断 nudge）
 - [ ] 更多策略：滑动窗口丢弃 / 分层摘要 / 约束下沉到 system prompt（CLAUDE.md 模式）对照

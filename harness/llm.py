@@ -47,10 +47,12 @@ def history_tokens(history):
 
 
 class OpenAICompatLLM:
-    def __init__(self, base_url, model, api_key=None, temperature=0.0):
+    def __init__(self, base_url, model, api_key=None, temperature=0.0, extra_body=None):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.temperature = temperature
+        # 透传到请求体的额外字段（如 DeepSeek 新模型关闭思考：{"thinking": {"type": "disabled"}}）
+        self.extra_body = dict(extra_body or {})
         self.api_key = (api_key or os.environ.get("DEEPSEEK_API_KEY")
                         or os.environ.get("OPENAI_API_KEY"))
         if not self.api_key:
@@ -59,6 +61,7 @@ class OpenAICompatLLM:
     def chat(self, messages, tools=None):
         payload = {"model": self.model, "messages": messages,
                    "temperature": self.temperature, "max_tokens": 4096}
+        payload.update(self.extra_body)
         if tools:
             payload["tools"] = [{"type": "function", "function": t} for t in tools]
         req = urllib.request.Request(
@@ -150,14 +153,14 @@ class MockLLM:
                         {"prompt_tokens": fake_in, "completion_tokens": 24}, raw)
 
 
-def make_llm(backend, base_url=None, model=None):
+def make_llm(backend, base_url=None, model=None, extra_body=None):
     if backend == "mock":
         return MockLLM()
     if backend == "deepseek":
         return OpenAICompatLLM(base_url or "https://api.deepseek.com",
-                               model or "deepseek-chat")
+                               model or "deepseek-chat", extra_body=extra_body)
     if backend == "openai-compat":
         if not base_url or not model:
             raise RuntimeError("openai-compat 后端需要 --base-url 与 --model")
-        return OpenAICompatLLM(base_url, model)
+        return OpenAICompatLLM(base_url, model, extra_body=extra_body)
     raise RuntimeError("未知 backend: " + backend)
